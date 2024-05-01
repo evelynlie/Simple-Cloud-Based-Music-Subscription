@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment 1 Cloud Computing</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<style>
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    td {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+</style>
+<body>
+    <!-- Login Form -->
+    <div id="loginFormLayout">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <div>
+                <label for="loginEmail">Email:</label>
+                <input type="email" id="loginEmail" name="email" required>
+            </div>
+            <div>
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" name="password" required>
+            </div>
+            <div>
+                <button type="submit">Login</button>
+            </div>
+        </form>
+        <p id="loginErrorMessage" style="color: red; display: none;"></p>
+        <p id="loginSuccessMessage" style="color: green; display: none;"></p>  
+        <p>Don't have an account? <a href="#" id="registerLink">Register here</a>.</p>
+    </div>
+
+    <!-- Register Form -->
+    <div id="registerFormLayout" style="display: none;">
+        <h2>Register</h2>
+        <form id="registerForm">
+            <div>
+                <label for="registerEmail">Email:</label>
+                <input type="email" id="registerEmail" name="email" required>
+            </div>
+            <div>
+                <label for="username">Username:</label>
+                <input type="username" id="username" name="username" required>
+            </div>
+            <div>
+                <label for="registerPassword">Password:</label>
+                <input type="password" id="registerPassword" name="password" required>
+            </div>
+            <div>
+                <button type="submit">Register</button>
+            </div>
+        </form>
+        <p id="registerErrorMessage" style="color: red; display: none;"></p>
+        <p id="registerSuccessMessage" style="color: green; display: none;"></p>  
+        <p>Already have an account? <a href="#" id="loginLink">Login here</a>.</p>
+    </div>
+
+     <!-- Main Page after logging in -->
+    <div id="mainPage" style="display: none;">
+        <h2>Welcome, <span id="loggedInUser"></span></h2>
+        <button onclick="logout()">Logout</button>
+
+        <h2>Subscription</h2>
+        <!-- Table for subscription -->
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Artist</th>
+                    <th>Year</th>
+                    <th>Artist Image</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="subscriptionTable">
+                <!-- Subscription data will be displayed here -->
+            </tbody>
+        </table>
+
+        <!-- Music Query Form -->
+        <h2>Music Query</h2>
+        <form id="musicQuery">
+            <div>
+                <label for="queryTitle">Title:</label>
+                <input type="text" id="queryTitle">
+            </div>
+            <div>
+                <label for="queryArtist">Artist:</label>
+                <input type="text" id="queryArtist">
+            </div>
+            <div>
+                <label for="queryYear">Year:</label>
+                <input type="number" id="queryYear">
+            </div>
+            <p id="queryErrorMessage" style="color: red; display: none;"></p>
+            <br>
+            <div>
+                <button id="queryButton">Query</button>
+            </div>
+        </form>
+
+        <!-- Display query results in table form -->
+        <div id="queryResultArea" style="display: none;">
+            <h2>Query Results</h2>
+            <table id="queryResultsTable">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Artist</th>
+                        <th>Year</th>
+                        <th>Artist Image</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="queryResults"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const lambda_function = "https://taqyb3jxi1.execute-api.us-east-1.amazonaws.com/Production/lambda_function";
+
+        // Function to show login form
+        function showLoginForm() {
+            $('#loginFormLayout').show();
+            $('#registerFormLayout').hide();
+            $('#mainPage').hide();
+        }
+
+        // Function to show registration form
+        function showRegisterForm() {
+            $('#registerFormLayout').show();
+            $('#loginFormLayout').hide();
+            $('#mainPage').hide();
+        }
+
+        // Function to show main page with data.body and user's email being passed as parameter
+        function showMainPage(user, userEmail) {
+            $('#loggedInUser').text(user.body.user_name);
+            $('#registerFormLayout').hide();
+            $('#loginFormLayout').hide();
+            $('#mainPage').show();
+
+            // Store user's login status in local storage
+            localStorage.setItem('loggedInUser', JSON.stringify(user));
+            localStorage.setItem('userEmail', userEmail);
+
+            // Load subscription data
+            loadSubscriptionData();
+        }
+
+        // Function to load subscription data
+        function loadSubscriptionData() {
+            // Retrieve user's login status from local storage
+            var user = JSON.parse(localStorage.getItem('loggedInUser'));
+            var userEmail = localStorage.getItem('userEmail');
+
+            $.ajax({
+                url: lambda_function,
+                dataType: 'json',
+                type: 'post',
+                async: false,
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "email": userEmail,
+                    "type": "getSubscription"
+                }),
+                success: function(data, textStatus, jQxhr) {
+                    // If data contains a body property
+                    if (data.body) {
+                        // Extract song information from the body
+                        var subscriptions = data.body;
+
+                        // Clear existing table rows
+                        $('#subscriptionTable').empty();
+
+                        /// Iterate over each subscription
+                        subscriptions.forEach(function(subscription) {
+                            // Create a table row for the subscription
+                            var row = `<tr>
+                                            <td>${subscription.songTitle}</td>
+                                            <td>${subscription.songArtist}</td>   
+                                            <td>${subscription.songYear}</td>
+                                            <td><img src="https://s3951140-a1.s3.amazonaws.com/${subscription.songArtist.replace(/\s/g, "")}.jpg"></td>
+                                            <td><button class="unsubscribeButton" onclick="unsubscribe('${subscription.subscriptionID}')">Remove</button></td>
+                                        </tr>`;
+                            $('#subscriptionTable').append(row);
+                        });
+                    } else {
+                        console.error("Data does not contain a body property:", data);
+                    }
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        }
+
+        // Logout function
+        function logout() {
+            // Clear user's login status from local storage
+            localStorage.removeItem('loggedInUser');
+            localStorage.removeItem('userEmail');
+
+            // Show the login form
+            showLoginForm();
+            location.reload();
+        }
+
+        // Subscribe function
+        function subscribe(songTitle, songArtist, songYear) {
+            // Retrieve user's login status from local storage
+            var user = JSON.parse(localStorage.getItem('loggedInUser'));
+            var userEmail = localStorage.getItem('userEmail');
+
+            $.ajax({
+                url: lambda_function,
+                dataType: 'json',
+                type: 'post',
+                async: false,
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "email": userEmail,
+                    "type": "subscribe",
+                    "songTitle": songTitle,
+                    "songArtist": songArtist,
+                    "songYear": parseInt(songYear),
+                }),
+                success: function(data, textStatus, jQxhr) {
+                    if (data.body === "Subscription already exists") {
+                        // Alert user that the subscription already exists using alert()
+                        alert("Subscription already exists!");
+                    }
+                    else{
+                        $("#subscribeErrorMessage").hide();
+                        console.log("Subscribed successfully:", data);
+                        location.reload();
+                    }
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        }
+
+        // Unsubscribe function
+        function unsubscribe(subscriptionID) {
+            // Retrieve user's login status from local storage
+            var user = JSON.parse(localStorage.getItem('loggedInUser'));
+            var userEmail = localStorage.getItem('userEmail');
+
+            $.ajax({
+                url: lambda_function,
+                dataType: 'json',
+                type: 'post',
+                async: false,
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "email": userEmail,
+                    "type": "unsubscribe",
+                    "subscriptionID": parseInt(subscriptionID)
+                }),
+                success: function(data, textStatus, jQxhr) {
+                    console.log("Unsubscribed successfully:", data);
+                    location.reload();
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        }
+
+        // Music Query Form submission
+        $("#musicQuery").submit(function(event) {
+            event.preventDefault();
+
+            var title = $("#queryTitle").val();
+            var artist = $("#queryArtist").val();
+            var year = $("#queryYear").val();
+
+            if (!title && !artist && !year) {
+                $("#queryErrorMessage").text("Please fill in at least 1 field.").show();
+                return;
+            }
+            else{
+                // If any of the fields are empty, set them to empty string
+                title = !title ? "" : title;
+                artist = !artist ? "" : artist;
+                year = !year ? "" : parseInt(year);
+
+                $.ajax({
+                    url: lambda_function,
+                    dataType: 'json',
+                    type: 'post',
+                    async: false,
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        "type": "getMusic",
+                        "title": title,
+                        "artist": artist,
+                        "year": year
+                    }),
+                    success: function(data, textStatus, jQxhr) {
+                        // If data contains a body property
+                        if (data.body.length > 0) {
+                            // Extract song information from the body
+                            var songs = data.body;
+                            // Clear existing table rows
+                            $('#queryResults').empty();
+                            
+                            // Iterate over each song
+                            songs.forEach(function(song) {
+                                // Create a table row for the song
+                                var row = `<tr>
+                                                <td>${song.title}</td>
+                                                <td>${song.artist}</td>
+                                                <td>${song.year}</td>
+                                                <td><img src="https://s3951140-a1.s3.amazonaws.com/${song.artist.replace(/\s/g, "")}.jpg"></td>
+                                                <td><button class="subscribeButton" onclick="subscribe('${song.title}', '${song.artist}', '${song.year}')">Subscribe</button></td>
+                                            </tr>`;
+                                $('#queryResults').append(row);
+                            });
+
+                            // Clear input fields after submission
+                            $("#queryTitle").val('');
+                            $("#queryArtist").val('');
+                            $("#queryYear").val('');     
+
+                            // Show the query result area
+                            $("#queryErrorMessage").hide();
+                            $('#queryResultArea').show();
+                        } else {
+                            $("#queryErrorMessage").text("No result is retrieved. Please query again.").show();
+                            $('#queryResultArea').hide();
+                        }
+                    },
+                    error: function(jqXhr, textStatus, errorThrown) {
+                        console.log(errorThrown);
+                    }
+                });
+            }
+        });
+
+        // Initial page setup
+        $(document).ready(function() {
+            var loggedInUser = localStorage.getItem('loggedInUser');
+            var userEmail = localStorage.getItem('userEmail');
+
+            if (loggedInUser && userEmail) {
+                showMainPage(JSON.parse(loggedInUser), userEmail);
+            } else {
+                showLoginForm();
+            }
+        
+            // Handle navigation between login and register forms
+            $('#registerLink').click(function(e) {
+                e.preventDefault();
+                showRegisterForm();
+            });
+
+            $('#loginLink').click(function(e) {
+                e.preventDefault();
+                showLoginForm();
+            });
+        });
+
+        // Login form submission
+        $("#loginForm").submit(function(event) {
+            event.preventDefault();
+
+            const email = $("#loginEmail").val();
+            const password = $("#loginPassword").val();
+
+            $.ajax({
+                url: lambda_function,
+                dataType: 'json',
+                type: 'post',
+                async: false,
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "email": email,
+                    "type": "get"
+                }),
+                success: function(data, textStatus, jQxhr) {
+                    if (data.body === undefined || data.body.password !== password) {
+                        $("#loginSuccessMessage").hide();
+                        $("#loginErrorMessage").text("Email or password is invalid.").show();
+                    } else {
+                        $("#loginErrorMessage").hide();
+                        showMainPage(data, email);
+                        
+                        // Clear input fields after submission
+                        $("#loginEmail").val('');
+                        $("#loginPassword").val('');
+
+                    }
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        });
+
+        // Registration form submission
+        $("#registerForm").submit(function(event) {
+            event.preventDefault();
+
+            const email = $("#registerEmail").val();
+            const username = $("#username").val();
+            const password = $("#registerPassword").val();
+
+            // Check if email exists
+            $.ajax({
+                url: lambda_function,
+                dataType: 'json',
+                type: 'post',
+                async: false,
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "email": email,
+                    "type": "get"
+                }),
+                success: function(data, textStatus, jQxhr) {
+                    // If email exists, display error message
+                    if (data.body && data.body.password !== null) {
+                        // Email already exists, display error message
+                        $("#registerSuccessMessage").hide();
+                        $("#registerErrorMessage").text("The email already exists.").show();
+                    } else {
+                        // Email does not exist, proceed with registration
+                        $.ajax({
+                            url: lambda_function,
+                            dataType: 'json',
+                            type: 'post',
+                            async: false,
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                "email": email,
+                                "user_name": username,
+                                "password": password,
+                                "type": "addUser"
+                            }),
+                            success: function(data, textStatus, jQxhr) {
+                                // Registration successful, go back to login form
+                                $("#registerErrorMessage").hide();
+                                showLoginForm();
+
+                                // Clear input fields after submission
+                                $("#registerEmail").val('');
+                                $("#username").val('');
+                                $("#registerPassword").val('');     
+                            },
+                            error: function(jqXhr, textStatus, errorThrown) {
+                                console.log(errorThrown);
+                            }
+                        });
+                    }
+                },
+                error: function(jqXhr, textStatus, errorThrown) {
+                    console.log(errorThrown);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
